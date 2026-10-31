@@ -1,0 +1,43 @@
+{
+  "id": "weapon-magazine",
+  "name": "Weapon Magazine",
+  "description": "Every gun holds {{multiplier}} times as many rounds before reloading.",
+  "version": "2.0.1",
+  "author": "KSFA",
+  "category": "Gear",
+  "tags": [
+    "weapons",
+    "guns",
+    "ammo",
+    "reload"
+  ],
+  "game_version": [
+    "5.0.3.0.0 - 1.87",
+    "5.0.4.0.0 - 1.88",
+    "5.0.4.1.0 - 1.89",
+    "5.0.4.4.0 - 1.91",
+    "5.0.5.0.0 - 1.92"
+  ],
+  "apply": "diff",
+  "requires": [],
+  "conflicts_with": [],
+  "settings": [
+    {
+      "id": "multiplier",
+      "label": "Magazine multiplier",
+      "type": "integer",
+      "default": 2,
+      "min": 1,
+      "max": 10,
+      "unit": "x",
+      "help": "Whole numbers only - these are whole-number columns in the game. 1 leaves it at stock. Capped at x10, well inside a defensible multiple of the highest magazine size the stock game itself ever uses."
+    }
+  ],
+  "patches": [
+    {
+      "type": "raw_sql",
+      "description": "capacity x{{multiplier}} on 160 row(s)",
+      "sql": "UPDATE master_part SET capacity = capacity * {{multiplier}} WHERE type = 'PTTP_ARM' AND capacity > 0;"
+    }
+  ]
+}

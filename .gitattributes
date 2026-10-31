@@ -1,0 +1,16 @@
+# The same rules as the manager's repository, so a mod got from here is byte
+# for byte the copy that comes with the manager.
+* text=auto eol=lf
+
+# Mod files are read as UTF-8 by the manager; never let git mangle them.
+*.sql text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+
+# Game packages, package patches and sounds are binary.
+*.upk binary
+*.PackagePatch binary
+*.tfc binary
+*.ogg binary
+*.bik binary
+*.bk2 binary

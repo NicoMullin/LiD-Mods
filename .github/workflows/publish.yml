@@ -1,0 +1,140 @@
+# Publishes the mods in mods/ for the LID DB Mod Manager's Get mods window.
+#
+# Every push to main builds one zip per mod and mods-index.json, the list the
+# manager reads, and puts them on the release "mods". Only a mod whose version
+# went up is uploaded again; the others stay as they are. A mod whose files
+# changed while its version did not stops the run: the manager re-applies a
+# mod only when its version changes, so players would keep the old one. Bump
+# "version" in its mod.json and push again.
+#
+# Each uploaded zip gets a signed record (attestation) tying it to this run
+# and commit, and the new or updated mods are posted to Discord when the
+# repository has a DISCORD_MOD_UPDATES_WEBHOOK secret.
+
+name: Publish
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish          # one at a time: each run reads the list the last one wrote
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # the release and its files
+      id-token: write       # sign the attestations
+      attestations: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Fetch the list published now
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p live
+          names=$(gh release view mods --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null || true)
+          if printf '%s\n' "$names" | grep -qx mods-index.json; then
+            gh release download mods --repo "$GITHUB_REPOSITORY" --pattern mods-index.json --dir live
+          else
+            echo "No mods-index.json published yet: everything is new."
+          fi
+
+      - name: Build the zips and the list
+        run: python tools/publish_mods.py --mods mods --out out --live live/mods-index.json
+
+      - name: Sign the new zips
+        if: github.event_name != 'pull_request' && hashFiles('out/*.zip') != ''
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: out/*.zip
+
+      - name: Publish
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python - <<'PY' > notes.md
+          import json, os
+          index = json.load(open("out/mods-index.json", encoding="utf-8"))
+          print("Every mod for the LID DB Mod Manager that needs no plugin. Get them in the manager:")
+          print("**Get mods**, the **Mods** tab - one at a time, only the ones you want.")
+          print()
+          print(f"Last built by GitHub Actions from commit {os.environ['GITHUB_SHA']} - [build log]({os.environ['RUN_URL']}).")
+          print()
+          print("| Mod | Version | By | File | SHA-256 |")
+          print("|---|---|---|---|---|")
+          for mod in sorted(index["mods"], key=lambda m: m["name"].lower()):
+              print(f"| {mod['name']} | {mod['version']} | {mod['author']} | {mod['file']} | `{mod['sha256']}` |")
+          print()
+          print("**Check a zip is the one built here**, with the [GitHub CLI](https://cli.github.com/):")
+          print()
+          print("```")
+          print(f"gh attestation verify <file>.zip --repo {os.environ['REPO']}")
+          print("```")
+          PY
+          if ! gh release view mods --repo "$REPO" > /dev/null 2>&1; then
+            gh release create mods --repo "$REPO" --title "Mods" --notes-file notes.md --target "$GITHUB_SHA"
+          fi
+          cd out
+          # the zips first, then the list that names them, then the old zips
+          if [ -s upload.txt ]; then
+            xargs -d '\n' gh release upload mods --repo "$REPO" --clobber < upload.txt
+          fi
+          gh release upload mods mods-index.json --repo "$REPO" --clobber
+          while IFS= read -r old; do
+            [ -n "$old" ] && gh release delete-asset mods "$old" --repo "$REPO" --yes
+          done < stale.txt
+          cd ..
+          gh release edit mods --repo "$REPO" --notes-file notes.md
+          {
+            echo "### Published"
+            echo
+            if [ -s out/changes.md ]; then cat out/changes.md; else echo "No mod changed version."; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post the updates to Discord
+        # One card listing the new and updated mods. Only when the repository
+        # has a DISCORD_MOD_UPDATES_WEBHOOK secret and some mod changed; the
+        # mods are out already, so a Discord problem only marks this step.
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_MOD_UPDATES_WEBHOOK }}
+          PAGE: ${{ github.server_url }}/${{ github.repository }}/releases/tag/mods
+        run: |
+          if [ -z "$DISCORD_WEBHOOK" ]; then
+            echo "No DISCORD_MOD_UPDATES_WEBHOOK secret, so nothing was posted to Discord."
+            exit 0
+          fi
+          if [ ! -s out/changes.md ]; then
+            echo "No mod changed version, so nothing was posted."
+            exit 0
+          fi
+          jq -n --rawfile news out/changes.md --arg page "$PAGE" --arg day "$(date -u +%F)" '
+            ($news | if length > 3900 then .[0:3890] + "…" else . end) as $n |
+            {
+              allowed_mentions: { parse: [] },
+              embeds: [{
+                title: "Mod updates",
+                url: $page,
+                color: 3066993,
+                description: "\($n)\nIn the mod manager: **Get mods**, the **Mods** tab, then **Update** (or **Get**). Then click **Save Mod List**.",
+                footer: { text: "Published \($day)" }
+              }]
+            }' > discord.json
+          curl -fsS -H "Content-Type: application/json" -d @discord.json "$DISCORD_WEBHOOK"

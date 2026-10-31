@@ -1,0 +1,47 @@
+{
+  "id": "decal-draw-price",
+  "name": "Decal Draw Price",
+  "description": "A draw from the Mushroom Club's decal pool costs {{price:comma}} KC instead of 50,000.",
+  "version": "2.0.1",
+  "author": "KSFA",
+  "category": "Economy",
+  "tags": [
+    "coins",
+    "decals",
+    "mushroom-club",
+    "prices"
+  ],
+  "game_version": [
+    "5.0.3.0.0 - 1.87",
+    "5.0.4.0.0 - 1.88",
+    "5.0.4.1.0 - 1.89",
+    "5.0.4.4.0 - 1.91",
+    "5.0.5.0.0 - 1.92"
+  ],
+  "requires": [],
+  "conflicts_with": [],
+  "settings": [
+    {
+      "id": "price",
+      "label": "Price",
+      "type": "integer",
+      "default": 10000,
+      "min": 1,
+      "max": 200000,
+      "step": 1000,
+      "unit": "KC",
+      "help": "The stock price is 50,000 KC. Capped at 200,000 - the highest price this exact field is ever set to anywhere in the stock game, so it stays inside what the game's own shop screens are proven to handle."
+    }
+  ],
+  "patches": [
+    {
+      "type": "update_set",
+      "description": "PRD_SKILL_GACHA price 50,000 -> {{price:comma}} KC",
+      "table": "master_shop_product_price",
+      "set": {
+        "price": "{{price}}"
+      },
+      "where": "id = 'PRD_SKILL_GACHA'"
+    }
+  ]
+}
