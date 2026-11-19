@@ -1,0 +1,41 @@
+{
+  "id": "Unbreakable Gear",
+  "name": "Unbreakable Gear",
+  "description": "Your weapons and armor never lose durability, so they never break. In return, gear costs x{{price}} to buy at Choku-Funsha. Haters' gear still wears down and breaks as normal.",
+  "version": "0.1.0",
+  "author": "KSFA",
+  "category": "Gear",
+  "tags": ["durability", "weapons", "armor", "prices", "game-files"],
+  "game_version": ["5.0.6.0.0 - 1.93"],
+  "min_manager_version": "0.12.0",
+  "apply": "diff",
+  "requires": [],
+  "conflicts_with": [],
+  "requires_check_off": ["BrgGame.upk"],
+  "settings": [
+    {
+      "id": "price",
+      "label": "Gear price",
+      "type": "integer",
+      "default": 10,
+      "min": 1,
+      "max": 100,
+      "unit": "x",
+      "help": "What weapons and armor cost to buy at Choku-Funsha, at every level. x1 is the game's own price. Selling pays the game's own amount, whatever this is set to."
+    }
+  ],
+  "patches": [
+    {
+      "type": "raw_sql",
+      "id": "price",
+      "description": "Weapon and armor buy prices x{{price}}",
+      "sql": "UPDATE master_part SET price_s = price_s * {{price}} WHERE type IN ('PTTP_ARM', 'PTTP_HEAD', 'PTTP_BODY', 'PTTP_LEGS') AND price_s > 0;"
+    },
+    {
+      "type": "tfc_installer",
+      "id": "no-wear",
+      "source": "tfc",
+      "description": "Your weapons and armor never lose durability (BrgGame.upk)"
+    }
+  ]
+}
